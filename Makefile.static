@@ -1,0 +1,62 @@
+# === Directories ===
+DIR_INC := ./inc
+DIR_SRC := ./src
+DIR_OBJ := ./obj
+
+# === Compiler and flags ===
+CXX := g++
+CXXFLAGS := -std=c++11 -O3 -pthread -MD -MP \
+    -I$(DIR_INC) \
+    -I/home/peng/software/isa-l/include \
+    -I/usr/include \
+    -I/usr/local/include
+
+# === Static libraries ===
+STATIC_LIBS := \
+    /usr/lib/libisal_crypto.a \
+    /usr/local/lib/libdeflate.a \
+    /usr/lib/x86_64-linux-gnu/libz.a \
+    /home/peng/software/isa-l/build/libisal.a \
+    -lpthread
+
+STATIC_LDFLAGS := -static -Wl,--no-as-needed $(STATIC_LIBS)
+
+# === Source files ===
+ALL_SRC := $(wildcard $(DIR_SRC)/*.cpp)
+
+# Split source files for each binary
+BMDSEQ_SRC := $(filter-out $(DIR_SRC)/kmer2abunt.cpp, $(ALL_SRC))
+KMER2ABUNT_SRC := \
+    $(DIR_SRC)/options.cpp \
+    $(DIR_SRC)/kmer2abunt.cpp \
+    $(DIR_SRC)/fastareader.cpp \
+    $(DIR_SRC)/kmer.cpp \
+    $(DIR_SRC)/read.cpp \
+    $(DIR_SRC)/writer.cpp \
+    $(DIR_SRC)/sequence.cpp
+
+# === Object files ===
+BMDSEQ_OBJ := $(patsubst $(DIR_SRC)/%.cpp,$(DIR_OBJ)/%.o,$(BMDSEQ_SRC))
+KMER2ABUNT_OBJ := $(patsubst $(DIR_SRC)/%.cpp,$(DIR_OBJ)/%.o,$(KMER2ABUNT_SRC))
+
+# === Targets ===
+TARGETS := bmdseq kmer2abunt
+
+all: static
+
+# === Static linking ===
+static: $(BMDSEQ_OBJ) $(KMER2ABUNT_OBJ)
+	$(CXX) $(BMDSEQ_OBJ) -o bmdseq $(STATIC_LDFLAGS)
+	$(CXX) $(KMER2ABUNT_OBJ) -o kmer2abunt $(STATIC_LDFLAGS)
+
+# === Compile .cpp to .o ===
+$(DIR_OBJ)/%.o: $(DIR_SRC)/%.cpp
+	@mkdir -p $(@D)
+	$(CXX) -c $< -o $@ $(CXXFLAGS)
+
+# === Clean ===
+clean:
+	rm -rf $(DIR_OBJ) $(TARGETS)
+
+# === Include dependency files ===
+-include $(wildcard $(DIR_OBJ)/*.d)

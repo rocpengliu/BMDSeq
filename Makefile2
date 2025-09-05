@@ -1,0 +1,92 @@
+# Directories
+DIR_SRC := src
+DIR_OBJ := obj
+DIR_INC := inc
+
+PREFIX ?= /usr/local
+BINDIR ?= $(PREFIX)/bin
+INCLUDE_DIRS ?=
+LIBRARY_DIRS ?=
+
+# Compiler & Flags
+CXX ?= g++
+CXXFLAGS := -std=c++11 -pthread -g -O3 -MD -MP \
+	-I$(DIR_INC) \
+	-I/usr/local/include/nlopt \
+	-I/usr/include/eigen3 \
+	-I$(DIR_SRC)/zlib \
+	-I$(DIR_SRC)/include \
+	-I$(DIR_SRC)/bmdscore \
+	$(foreach includedir,$(INCLUDE_DIRS),-I$(includedir)) \
+	$(CXXFLAGS)
+
+LIBS := -lnlopt -lgsl -lgslcblas -lisal -ldeflate -lpthread -lz
+
+STATIC_FLAGS := -static -Wl,--no-as-needed -pthread
+LD_FLAGS := $(foreach librarydir,$(LIBRARY_DIRS), -L$(librarydir)) $(LIBS) $(LD_FLAGS)
+STATIC_LD_FLAGS := $(foreach librarydir,$(LIBRARY_DIRS), -L$(librarydir)) $(STATIC_FLAGS) $(LIBS) $(STATIC_LD_FLAGS)
+
+# Source files
+SRC_MAIN := $(wildcard $(DIR_SRC)/*.cpp)
+SRC_BMDS := $(wildcard $(DIR_SRC)/bmdscore/*.cpp)
+ALL_SRC := $(SRC_MAIN) $(SRC_BMDS)
+
+# Object files
+OBJ_MAIN := $(patsubst $(DIR_SRC)/%.cpp,$(DIR_OBJ)/%.o,$(SRC_MAIN))
+OBJ_BMDS := $(patsubst $(DIR_SRC)/bmdscore/%.cpp,$(DIR_OBJ)/bmdscore/%.o,$(SRC_BMDS))
+ALL_OBJ := $(OBJ_MAIN) $(OBJ_BMDS)
+
+# Executable-specific sources
+KMER2ABUNT_SRC := \
+	$(DIR_SRC)/options.cpp \
+	$(DIR_SRC)/kmer2abunt.cpp \
+	$(DIR_SRC)/bmdseeker.cpp \
+	$(DIR_SRC)/fastareader.cpp \
+	$(DIR_SRC)/kmer.cpp \
+	$(DIR_SRC)/read.cpp \
+	$(DIR_SRC)/writer.cpp \
+	$(DIR_SRC)/sequence.cpp \
+	$(SRC_BMDS)
+
+KMER2ABUNT_OBJ := $(patsubst $(DIR_SRC)/%.cpp, $(DIR_OBJ)/%.o, \
+	$(filter $(DIR_SRC)/%.cpp,$(KMER2ABUNT_SRC))) \
+	$(patsubst $(DIR_SRC)/bmdscore/%.cpp, $(DIR_OBJ)/bmdscore/%.o, \
+	$(filter $(DIR_SRC)/bmdscore/%.cpp,$(KMER2ABUNT_SRC)))
+
+# Targets
+TARGETS := bmdseq kmer2abunt
+
+all: $(TARGETS)
+
+bmdseq: $(ALL_OBJ)
+	$(CXX) $^ -o $@ $(LD_FLAGS)
+
+kmer2abunt: $(KMER2ABUNT_OBJ)
+	$(CXX) $^ -o $@ $(LD_FLAGS)
+
+static:
+	$(CXX) $(ALL_OBJ) -o bmdseq $(STATIC_LD_FLAGS)
+	$(CXX) $(KMER2ABUNT_OBJ) -o kmer2abunt $(STATIC_LD_FLAGS)
+
+# Compile rules
+$(DIR_OBJ)/%.o: $(DIR_SRC)/%.cpp
+	@mkdir -p $(@D)
+	$(CXX) -c $< -o $@ $(CXXFLAGS)
+
+$(DIR_OBJ)/bmdscore/%.o: $(DIR_SRC)/bmdscore/%.cpp
+	@mkdir -p $(@D)
+	$(CXX) -c $< -o $@ $(CXXFLAGS)
+
+# Clean rule
+clean:
+	@rm -rf $(DIR_OBJ)
+	@rm -f $(TARGETS)
+
+# Install rule
+install:
+	install bmdseq $(BINDIR)/bmdseq
+	install kmer2abunt $(BINDIR)/kmer2abunt
+	@echo "Installed."
+
+# Dependencies
+-include $(ALL_OBJ:.o=.d)
